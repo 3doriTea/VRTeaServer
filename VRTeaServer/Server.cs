@@ -21,13 +21,13 @@ namespace VRTeaServer
 		}
 
 		public TcpClient Client { get; }
-		public CancellationToken cancellationToken { get; } = new();
+		public CancellationTokenSource cts { get; } = new();
 		public ConcurrentQueue<string> SendQueue { get; set; } = new();
 		public ConcurrentQueue<string> RecvQueue { get; set; } = new();
 
 		public void Dispose()
 		{
-			cancellationToken.ThrowIfCancellationRequested();
+			cts.Cancel();
 			Client.Close();
 			Client.Dispose();
 		}
@@ -36,9 +36,9 @@ namespace VRTeaServer
 	internal class Server : IDisposable
 	{
 		private ushort _port;
-		private readonly ConcurrentDictionary<int, Session> _sessions = [];
+		internal readonly ConcurrentDictionary<int, Session> _sessions = [];
 		private TcpListener? _listener;
-		private readonly CancellationToken _cancellationToken = new();
+		private readonly CancellationTokenSource _cts = new();
 
 		public Server(ushort port)
 		{
@@ -53,7 +53,7 @@ namespace VRTeaServer
 			}
 		}
 
-		public async void Start()
+		public async Task Start()
 		{
 			IPEndPoint localIPEP = new(IPAddress.Any, _port);
 			_listener = new(localIPEP);
@@ -64,7 +64,7 @@ namespace VRTeaServer
 			{
 				try
 				{
-					TcpClient tcpClient = await _listener.AcceptTcpClientAsync(_cancellationToken);
+					TcpClient tcpClient = await _listener.AcceptTcpClientAsync(_cts.Token);
 					Session session = _sessions.AddOrUpdate(
 						_sessions.Count,
 						new Session(tcpClient),
@@ -73,7 +73,7 @@ namespace VRTeaServer
 							s.Dispose();
 							return new Session(tcpClient);
 						});
-					_ = SessionClientAsync(session, tcpClient, session.cancellationToken);
+					_ = SessionClientAsync(session, tcpClient, session.cts);
 				}
 				catch (OperationCanceledException ex)
 				{
@@ -82,32 +82,50 @@ namespace VRTeaServer
 			}
 		}
 
-		private async Task SessionClientAsync(Session session, TcpClient client, CancellationToken cancellationToken)
+		private static async Task SessionClientAsync(Session session, TcpClient client, CancellationTokenSource cts)
 		{
-			using (client)
+			using (session)
 			{
 				NetworkStream stream = client.GetStream();
 				byte[] buffer = new byte[1024];
 
 				try
 				{
-					int bytesRead = 0;
-					while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
-					{
-						session.RecvQueue.Enqueue(new RecvData())
-						buffer
-					}
+					await Task.WhenAll(
+						Task.Run(async () =>
+						{
+							int bytesRead = 0;
+							while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+							{
+								session.RecvQueue.Enqueue(Encoding.UTF8.GetString(buffer));
+							}
+						}, cts.Token),
+						Task.Run(async () =>
+						{
+							string? sendString = null;
+							while (true)
+							{
+								while (session.SendQueue.TryDequeue(out sendString))
+								{
+									byte[] sendBuffer = Encoding.UTF8.GetBytes(sendString);
+									await stream.WriteAsync(sendBuffer, cts.Token);
+								}
+								await Task.Delay(10, cts.Token);
+							}
+						}, cts.Token));
 				}
 				catch (OperationCanceledException ex)
 				{
-					session.Dispose();
+				}
+				catch (IOException ex)
+				{
 				}
 			}
 		}
 
 		public void Stop()
 		{
-			_cancellationToken.ThrowIfCancellationRequested();
+			_cts.Cancel();
 		}
 	}
 }
