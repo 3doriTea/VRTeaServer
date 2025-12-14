@@ -1,8 +1,8 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -32,11 +32,14 @@ namespace VRTeaServer
 						string? request;
 						if (session.RecvQueue.TryDequeue(out request))
 						{
-							var format = GodFormatter.Load(request);
-							Console.WriteLine($"format.Method={format.Method}, format.Directory={format.Directory}, format.Version={format.Version}");
-							Console.WriteLine(new string('-', 30));
+							if (request.StartsWith("GET"))
+							{
 
-							var responce = new HttpResponce
+								var format = GodFormatter.Load(request);
+								Console.WriteLine($"format.Method={format.Method}, format.Directory={format.Directory}, format.Version={format.Version}");
+								Console.WriteLine(new string('-', 30));
+
+								var responce = new HttpResponce
 							{
 								Content = string.Join("\n",
 								[
@@ -58,8 +61,20 @@ namespace VRTeaServer
 								])
 							};
 
-							responce.StoreResponce(out var str);
-							session.SendQueue.Enqueue(str);
+								responce.StoreResponce(out var str);
+								session.SendQueue.Enqueue(str);
+							}
+							else if (request.StartsWith("{"))
+							{
+								var json = JObject.Parse(request);
+								string? head = (string?)json["head"];
+								if (head is null)
+								{
+									continue;
+								}
+
+								
+							}
 						}
 					}
 
