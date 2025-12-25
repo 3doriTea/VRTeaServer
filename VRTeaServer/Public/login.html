@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>VRTea Server</title>
+	<link rel="stylesheet" href="index.css">
+</head>
+
+<body>
+	<script>
+		const sessionToken = localStorage.getItem("sessionToken");
+		if (sessionToken) {
+			console.log("sessionToken found:", sessionToken);
+			// location.href = "/account";
+		}
+	</script>
+
+	<h1>お客様の情報を入力してください</h1>
+	<input type="text" id="userName" placeholder="お名前を入力">
+	<input type="password" id="userPassword" placeholder="パスワード">
+	<div class="button-container">
+		<button class="favorite styled" type="button" onclick="tryLogin()">決定</button>
+	</div>
+	<p id="error-message"></p>
+
+	<script>
+		function setErrorMessage(message) {
+			const errorMessageElement = document.getElementById("error-message");
+			errorMessageElement.textContent = message;
+		}
+
+		function tryLogin() {
+			const name = document.getElementById("userName").value;
+			const password = document.getElementById("userPassword").value;
+
+			// 簡単なバリデーション
+			if (name === "" || password === "") {
+				alert("お名前とパスワードを入力してください。");
+				return;
+			}
+
+
+
+
+			(async () => {
+				try {
+					const msgUint8 = new TextEncoder().encode(password);
+					const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+					const hashArray = Array.from(new Uint8Array(hashBuffer));
+					const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+					console.log("Password Hash:", hashHex);
+
+					const response = await fetch("/account", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json"
+						},
+						body: JSON.stringify({ header: "trypass", name: name, passwordHash: hashHex })
+					});
+					if (response.ok) {
+						const json = await response.json();
+						if (json["header"] === "success") {
+							localStorage.setItem("sessionToken", json["sessionToken"]);
+							location.reload();
+						} else {
+							setErrorMessage("ログインに失敗しました。お名前またはパスワードが正しくありません。");
+						}
+					} else {
+						setErrorMessage("ログインに失敗しました。お名前またはパスワードが正しくありません。");
+					}
+				} catch (error) {
+					console.error("ログインエラー:", error);
+					alersetErrorMessaget("ログインに失敗しました。もう一度お試しください。");
+				}
+			})();
+
+
+			// ログイン処理（ここでは単純にアラートを表示）
+			setErrorMessage(`ようこそ、${name}さん！`);
+			// 実際のアプリケーションでは、ここでサーバーにログインリクエストを送信します。
+		}
+	</script>
+</body>
+
+</html>

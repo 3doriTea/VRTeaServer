@@ -22,7 +22,7 @@ namespace VRTeaServer
 
 		public TcpClient Client { get; }
 		public CancellationTokenSource cts { get; } = new();
-		public ConcurrentQueue<string> SendQueue { get; set; } = new();
+		public ConcurrentQueue<byte[]> SendQueue { get; set; } = new();
 		public ConcurrentQueue<string> RecvQueue { get; set; } = new();
 
 		public void Dispose()
@@ -102,12 +102,11 @@ namespace VRTeaServer
 						}, cts.Token),
 						Task.Run(async () =>
 						{
-							string? sendString = null;
+							byte[]? sendBuffer = null;
 							while (true)
 							{
-								while (session.SendQueue.TryDequeue(out sendString))
+								while (session.SendQueue.TryDequeue(out sendBuffer))
 								{
-									byte[] sendBuffer = Encoding.UTF8.GetBytes(sendString);
 									await stream.WriteAsync(sendBuffer, cts.Token);
 								}
 								await Task.Delay(10, cts.Token);
@@ -116,9 +115,12 @@ namespace VRTeaServer
 				}
 				catch (OperationCanceledException ex)
 				{
+					_ = ex;
+					return;
 				}
 				catch (IOException ex)
 				{
+					Console.WriteLine($"{ex}");
 				}
 			}
 		}

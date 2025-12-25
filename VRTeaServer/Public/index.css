@@ -1,0 +1,105 @@
+body {
+	background-color: #000000;
+	/* 真っ黒 */
+	color: #ffffff;
+	/* 文字を白くして読みやすくする */
+	margin: 0;
+	/* 画面端の余白を消す */
+	padding: 0;
+}
+
+.styled {
+	border: 0;
+	line-height: 2.5;
+	padding: 0 20px;
+	font-size: 1rem;
+	text-align: center;
+	color: white;
+	text-shadow: 1px 1px 1px black;
+	border-radius: 20px;
+	background-color: tomato;
+	background-image: linear-gradient(to top left,
+			rgb(0 0 0 / 0.2),
+			rgb(0 0 0 / 0.2) 30%,
+			transparent);
+	box-shadow:
+		inset 2px 2px 3px rgb(255 255 255 / 0.6),
+		inset -2px -2px 3px rgb(0 0 0 / 0.6);
+}
+
+.styled:hover {
+	background-color: red;
+}
+
+.styled:active {
+	box-shadow:
+		inset -2px -2px 3px rgb(255 255 255 / 0.6),
+		inset 2px 2px 3px rgb(0 0 0 / 0.6);
+}
+
+.button-container {
+	display: flex;
+	flex-direction: row;
+	/* 縦に並べる。横なら row */
+	gap: 20px;
+	/* ボタン同士の間隔を20pxに固定 */
+	align-items: center;
+	/* 中央揃え */
+	justify-content: center;
+	/* border: 1px solid #5865F2; */
+	padding-top: 10px;
+}
+
+.discord-button {
+	background-color: #1f1f1f;
+	color: white;
+	text-decoration: none;
+	border-radius: 20px;
+	padding: 10px;
+
+	/* ボタン全体のサイズをここで固定！ */
+	width: 300px;
+	height: 62px;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 5px;
+}
+
+/* ここが重要：巨大な元の画像を強制的に小さくする */
+.discord-icon {
+	/* width: 32px; */
+	/* アイコンの横幅を32pxに固定 */
+	height: 32px;
+	/* 縦も固定 */
+	object-fit: contain;
+	/* 縦横比が崩れないように調整 */
+}
+
+.discord-button span {
+	font-size: 14px;
+	white-space: nowrap;
+	/* 文字がはみ出さないように一行にする */
+}
+
+.copy-right {
+	align-items: center;
+	justify-content: center;
+	display: flex;
+}
+
+footer {
+	width: 100%;
+	padding: 20px 0;
+	/* 上下に隙間を作る */
+	background-color: #000000;
+	/* サイト全体と同じ黒 */
+	color: #888888;
+	/* 少し暗めのグレーで見やすく */
+	text-align: center;
+	/* 文字を中央寄せ */
+	font-size: 12px;
+	/* コピーライトは小さめが基本 */
+	border-top: 1px solid #222;
+	/* 境界線を薄く入れるとかっこいい */
+}
