@@ -9,26 +9,89 @@
 </head>
 
 <body>
-	<script>
-		const sessionToken = localStorage.getItem("sessionToken");
-		if (sessionToken) {
-			console.log("sessionToken found:", sessionToken);
-			// location.href = "/account";
-		}
-	</script>
-
-	<h1>お客様の情報を入力してください</h1>
-	<input type="text" id="userName" placeholder="お名前を入力">
-	<input type="password" id="userPassword" placeholder="パスワード">
-	<div class="button-container">
-		<button class="favorite styled" type="button" onclick="tryLogin()">決定</button>
+	<div id="logged-in-area" style="display: none;">
+		<h1 id="logged-name"></h1>
+		<div class="button-container">
+			<button class="favorite styled" type="button" onclick="logout()">ログアウト</button>
+		</div>
 	</div>
-	<p id="error-message"></p>
+	<div id="login-area">
+		<h1>お客様の情報を入力してください</h1>
+		<input type="text" id="userName" placeholder="お名前を入力">
+		<input type="password" id="userPassword" placeholder="パスワード">
+		<div class="button-container">
+			<button class="favorite styled" type="button" onclick="tryLogin()">決定</button>
+		</div>
+		<p id="error-message"></p>
+	</div>
 
 	<script>
 		function setErrorMessage(message) {
 			const errorMessageElement = document.getElementById("error-message");
 			errorMessageElement.textContent = message;
+		}
+
+		async function getInfo(at) {
+			try {
+				debugger;
+
+				const response = await fetch("/account", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json"
+					},
+					body: JSON.stringify({ header: "getinfo", at: at, sessionHash: localStorage.getItem("sessionHash") })
+				});
+
+				if (!response.ok) {
+					logout();
+					return;
+				}
+
+				const json = await response.json();
+				const content = json["content"];
+
+				if (!content) {
+					logout();
+					return;
+				}
+
+				return content;
+			} catch (e) {
+				console.error("Error fetching info:", e);
+				logout();
+				return;
+			}
+		}
+
+		const sessionHash = localStorage.getItem("sessionHash");
+		const loginForm = document.getElementById("login-area");
+		const loggedInArea = document.getElementById("logged-in-area");
+
+		if (sessionHash) {
+			console.log("sessionHash found:", sessionHash);
+
+			(async () => {
+				debugger;
+				const userName = await getInfo("name");
+				debugger;
+				if (!userName) {
+					return;
+				}
+				debugger;
+
+				const loggedName = document.getElementById("logged-name");
+				loggedName.textContent = `おかえりなさいませ、${userName} 様！`;
+				loginForm.style.display = "none";
+				loggedInArea.style.display = "block";
+			})();
+		}
+
+		function logout() {
+			console.log("Logging out...");
+
+			localStorage.removeItem("sessionHash");
+			location.reload(); // ページをリロードして未ログイン状態に戻す
 		}
 
 		function tryLogin() {
@@ -63,7 +126,8 @@
 					if (response.ok) {
 						const json = await response.json();
 						if (json["header"] === "success") {
-							localStorage.setItem("sessionToken", json["sessionToken"]);
+							console.log("Login successful, sessionHash:", json["sessionHash"]);
+							localStorage.setItem("sessionHash", json["sessionHash"]);
 							location.reload();
 						} else {
 							setErrorMessage("ログインに失敗しました。お名前またはパスワードが正しくありません。");
@@ -73,7 +137,7 @@
 					}
 				} catch (error) {
 					console.error("ログインエラー:", error);
-					alersetErrorMessaget("ログインに失敗しました。もう一度お試しください。");
+					setErrorMessage("ログインに失敗しました。もう一度お試しください。");
 				}
 			})();
 

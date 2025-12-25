@@ -8,15 +8,18 @@ using System.Threading.Tasks;
 
 namespace VRTeaServer
 {
+	internal enum ActiveUserStatus
+	{
+		Free,
+		TryLogin,
+		Logined,
+	}
+
 	internal class ActiveUser
 	{
-		public enum Status
-		{
-			Free,
-			TryLogin,
-			Logined,
-		}
+		
 
-		public Status status { get; set; } = Status.Free;
+		public ActiveUserStatus Status { get; set; } = ActiveUserStatus.Free;
+		public string Name { get; set; } = "";
 	}
 }

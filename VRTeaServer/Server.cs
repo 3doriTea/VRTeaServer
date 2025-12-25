@@ -97,7 +97,7 @@ namespace VRTeaServer
 							int bytesRead = 0;
 							while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
 							{
-								session.RecvQueue.Enqueue(Encoding.UTF8.GetString(buffer));
+								session.RecvQueue.Enqueue(Encoding.UTF8.GetString(buffer, 0, bytesRead));
 							}
 						}, cts.Token),
 						Task.Run(async () =>
