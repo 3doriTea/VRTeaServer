@@ -10,20 +10,17 @@ namespace VRTeaServer
 {
 	class Player
 	{
-		public string Name { get; set; }
-		public int Id { get; set; }
-		public float PositionX { get; set; }
-		public float PositionY { get; set; }
-		public float PositionZ { get; set; }
-		public float RotationX { get; set; }
-		public float RotationY { get; set; }
-		public float RotationZ { get; set; }
-		public float ScaleX { get; set; }
-		public float ScaleY { get; set; }
-		public float ScaleZ { get; set; }
+		public int Id { get; set; } = 0;
+		public string Name { get; set; } = string.Empty;
+		public float PositionX { get; set; } = 0.0f;
+		public float PositionY { get; set; } = 0.0f;
+		public float PositionZ { get; set; } = 0.0f;
+		public int PositionW { get; set; } = 0;
+		public float RotationY { get; set; } = 0.0f;
 	}
 	internal class World
 	{
+		public ConcurrentDictionary<string, int> NameToId { get; set; } = new();
 		public ConcurrentDictionary<int, Player> Players { get; set; } = new();
 		public World()
 		{

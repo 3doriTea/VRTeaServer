@@ -3,20 +3,35 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using VRTeaServer.DB;
 using VRTeaServer.Web;
 
+using static VRTeaServer.JsonUtility;
+
 namespace VRTeaServer
 {
 	internal class God
 	{
+		private const int TryCount = 3;  // 失敗してリトライするカウント
+
 		private int intervalMillSec = 10;
 		private World _world;
 		private Server _server;
 		private ConcurrentDictionary<string, ActiveUser> _activeUsers = [];
 		private DBConnector _dBConnector = new();
+
+		private int _anonymousCount = -1;
+
+		private class GodJsonRequestException : Exception
+		{
+			// 単体例外
+			public GodJsonRequestException(string message) : base(message) { }
+			// 内部例外を受け取りつつ
+			public GodJsonRequestException(string message, Exception innner) : base(message, innner) { }
+		}
 
 		public God(World world, Server server)
 		{
@@ -225,11 +240,149 @@ namespace VRTeaServer
 				}
 				else if (request.StartsWith("{"))
 				{
+					Console.WriteLine(request);
+
 					var json = JObject.Parse(request);
 					string? head = (string?)json["head"];
 					if (head is null)
 					{
 						return;
+					}
+
+					var respJson = new JObject();
+
+					GodJsonRequestException Error(string message, string hint = "idk.")
+					{
+						if (!respJson.TryGet<string>("head", out var head))
+						{
+							head = "?";
+						}
+
+						respJson = new()
+						{
+							["head"] = "error",
+							["body"] = message,
+							["hint"] = hint,
+							["dist"] = head
+						};
+						return new GodJsonRequestException(message);
+					}
+
+					try
+					{
+						switch (head)
+						{
+							case "update":
+							{
+								respJson["head"] = "update";
+
+								if (json["body"] is null)
+								{
+									throw Error("Missing request \"body\"");
+								}
+								var body = json["body"]!;
+
+								if (!json.TryGet<string>("name", out var name))
+								{
+									throw Error("Missing request \"name\"");
+								}
+
+
+								if (!body.TryGet<float>("positionX", out var posX))
+								{
+									throw Error("Missing request \"body.position.x\"");
+								}
+								if (!body.TryGet<float>("positionY", out var posY))
+								{
+									throw Error("Missing request \"body.position.y\"");
+								}
+								if (!body.TryGet<float>("positionZ", out var posZ))
+								{
+									throw Error("Missing request \"body.position.z\"");
+								}
+								if (!body.TryGet<int>("positionW", out var posW))
+								{
+									throw Error("Missing request \"body.position.w\"");
+								}
+								if (!body.TryGet<float>("rotationY", out var rotY))
+								{
+									throw Error("Missing request \"body.rotationY\"");
+								}
+
+								if (name is null)
+								{
+									throw Error("Not found your name");
+								}
+
+								if (!_world.NameToId.TryGetValue(name, out var userId))
+								{
+									throw Error("Not logged in");
+								}
+
+								if (!_world.Players.TryGetValue(userId, out var player))
+								{
+									throw Error("conflict get value");
+								}
+
+								if (!_world.Players.TryUpdate(userId, new Player
+									{ Id = userId, Name = name, PositionX = posX, PositionY = posY, PositionZ = posZ, PositionW = posW, RotationY = rotY }, player))
+								{
+									throw Error("conflict update");
+								}
+								break;
+							}
+							case "join":
+								respJson["head"] = "joined";
+
+								int joinedUserId = _anonymousCount;
+								_anonymousCount--;
+
+								string joinedUserName = NameGenerator.Generate(joinedUserId);
+								respJson["name"] = joinedUserName;
+								respJson["id"] = joinedUserId;
+
+								int tryCount = 0;
+								// 何回か試す
+								while (!_world.NameToId.TryAdd(joinedUserName, joinedUserId)
+									&& tryCount < TryCount)
+								{
+									tryCount++;
+									await Task.Delay(1, cancellationToken);
+								}
+
+								if (tryCount >= TryCount)
+								{
+									throw Error("conflict NameToId dict");
+								}
+
+								tryCount = 0;
+								// 何回か試す
+								while (!_world.Players.TryAdd(joinedUserId, new Player())
+									&& tryCount < TryCount)
+								{
+									tryCount++;
+									await Task.Delay(1, cancellationToken);
+								}
+
+								if (tryCount >= TryCount)
+								{
+									throw Error("conflict players dict");
+								}
+
+								break;
+							default:
+								respJson["head"] = "\\_ツ_/";
+								break;
+						}
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"God Json request error:{ex}");
+					}
+					finally
+					{
+						// 必ず！直接！ 送信。
+						session.SendQueue.Enqueue(Encoding.UTF8.GetBytes(respJson.ToString()));
 					}
 				}
 			}
@@ -240,8 +393,7 @@ namespace VRTeaServer
 				{
 					foreach (var (id, session) in _server._sessions)
 					{
-						string? request;
-						if (session.RecvQueue.TryDequeue(out request))
+						if (session.RecvQueue.TryDequeue(out var request))
 						{
 							await RequestProc(request, id, session);
 						}
