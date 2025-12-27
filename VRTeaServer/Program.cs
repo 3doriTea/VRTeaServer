@@ -9,9 +9,16 @@ class Program
 		World world = new();
 		Console.Write("Ok!");
 
-
 		Console.WriteLine("Server booting...");
-		Server server = new(33333);
+
+		string? ipAddr = null;
+		while (string.IsNullOrEmpty(ipAddr))
+		{
+			Console.WriteLine("IPAddress:");
+			ipAddr = Console.ReadLine();
+		}
+
+		Server server = new(3333, ipAddr);
 		var serverTask = server.Start();
 		Console.Write("Ok!");
 

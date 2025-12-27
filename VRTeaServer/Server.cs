@@ -39,15 +39,17 @@ namespace VRTeaServer
 	internal class Server : IDisposable
 	{
 		private ushort _port;
+		private string _address;
 		internal readonly ConcurrentDictionary<int, Session> _sessions = [];
 		private TcpListener? _listener;
 		private readonly CancellationTokenSource _cts = new();
 		public Action<int> OnDisconnected { get; set; } = delegate { };
 
 
-		public Server(ushort port)
+		public Server(ushort port, string address)
 		{
 			_port = port;
+			_address = address;
 
 			OnDisconnected += Disconnect;
 		}
@@ -62,7 +64,16 @@ namespace VRTeaServer
 
 		public async Task Start()
 		{
-			IPEndPoint localIPEP = new(IPAddress.Any, _port);
+			IPEndPoint? localIPEP;
+			if (string.IsNullOrEmpty(_address))
+			{
+				localIPEP = new(IPAddress.Any, _port);
+			}
+			else
+			{
+				localIPEP = new(IPAddress.Parse(_address), _port);
+			}
+			
 			_listener = new(localIPEP);
 
 			_listener.Start();
