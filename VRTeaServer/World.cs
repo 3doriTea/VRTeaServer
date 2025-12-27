@@ -20,7 +20,7 @@ namespace VRTeaServer
 	}
 	internal class World
 	{
-		public ConcurrentDictionary<string, int> NameToId { get; set; } = new();
+		public ConcurrentDictionary<int, int> SessionIdToUserId { get; set; } = new();
 		public ConcurrentDictionary<int, Player> Players { get; set; } = new();
 		public World()
 		{

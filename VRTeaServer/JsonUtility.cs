@@ -1,40 +1,52 @@
 ﻿using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace VRTeaServer
 {
 	internal static class JsonUtility
 	{
-		public static bool TryGet<T>(this JToken json, string key, out T? value)
+		public static bool TryGet<T>(this JToken? json, string key, out T? value)
 		{
-			object? prot = json[key];
+			value = default;
 
-			if (prot is null)
+			var j = json?[key];
+			if (j is null)
 			{
-				value = default;
 				return false;
 			}
 
-			value = (T)prot;
-			return true;
+			try
+			{
+				if (j.Value<T?>() is T v)
+				{
+					value = v;
+					return true;
+				}
+			}
+			catch
+			{
+			}
+			return false;
 		}
+		public static bool TryGet<T>(this JObject json, string key, out T? value)
+		{
+			value = default;
 
-		//public static bool TryGet<T>(this JObject json, string key, out T? value)
-		//{
-		//	object? prot = json[key];
-
-		//	if (prot is null)
-		//	{
-		//		value = default;
-		//		return false;
-		//	}
-
-		//	value = (T)prot;
-		//	return true;
-		//}
+			try
+			{
+				if (json.TryGetValue(key, out var obj))
+				{
+					value = obj.Value<T>();
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			catch
+			{
+			}
+			return false;
+		}
 	}
 }

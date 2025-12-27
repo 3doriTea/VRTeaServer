@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
@@ -38,11 +39,43 @@ namespace VRTeaServer
 			_world = world;
 			_server = server;
 			_dBConnector.InitializeDatabaseAsync().Wait();
+
+			_server.OnDisconnected += disconnectedSessionId =>
+			{
+				// 切断したユーザーを消す
+				_world.SessionIdToUserId.Remove(disconnectedSessionId, out _);
+
+				JObject sendJson = JObject.FromObject(new
+				{
+					head = "event",
+					body = new
+					{
+						handle = "disconnected",
+						userId = disconnectedSessionId,
+					},
+				});
+
+				// 必ず！直接！ 送信。
+				string jsonStr = sendJson.ToString();
+				int jsonSize = Encoding.UTF8.GetByteCount(jsonStr);
+
+				Console.WriteLine($"Send:{jsonStr}");
+
+				byte[] sendBuffer = new byte[jsonSize + sizeof(int)];
+				// クライアントはWindowsだから必ずリトルエンディアンにする！
+				BinaryPrimitives.WriteInt32LittleEndian(sendBuffer, jsonSize);
+				Encoding.UTF8.GetBytes(jsonStr).AsSpan().CopyTo(sendBuffer.AsSpan(sizeof(int)));
+
+				foreach (var (id, session) in _server._sessions)
+				{
+					session.SendQueue.Enqueue(sendBuffer);
+				}
+			};
 		}
 
 		public async Task Start(CancellationToken cancellationToken)
 		{
-			async Task RequestProc(string request, int id, Session session)
+			async Task RequestProc(string request, int sessionId, Session session)
 			{
 				Console.WriteLine($"request:{request}");
 				if (request.StartsWith("POST"))
@@ -242,11 +275,20 @@ namespace VRTeaServer
 				{
 					Console.WriteLine(request);
 
-					var json = JObject.Parse(request);
+					JObject? json = null;
+					try
+					{
+						json = JObject.Parse(request);
+					}
+					catch
+					{
+						Console.WriteLine("Failed parse request json");
+						return;  // 変換できないため無視
+					}
 					string? head = (string?)json["head"];
 					if (head is null)
 					{
-						return;
+						return;  // ヘッドがないため無視
 					}
 
 					var respJson = new JObject();
@@ -274,18 +316,19 @@ namespace VRTeaServer
 						{
 							case "update":
 							{
-								respJson["head"] = "update";
+								respJson["head"] = "updated";
+
+								if (!json.TryGet<int>("id", out var userId))
+								{
+									throw Error("Missing request \"id\"");
+								}
 
 								if (json["body"] is null)
 								{
 									throw Error("Missing request \"body\"");
 								}
-								var body = json["body"]!;
 
-								if (!json.TryGet<string>("name", out var name))
-								{
-									throw Error("Missing request \"name\"");
-								}
+								var body = json["body"];
 
 
 								if (!body.TryGet<float>("positionX", out var posX))
@@ -309,12 +352,7 @@ namespace VRTeaServer
 									throw Error("Missing request \"body.rotationY\"");
 								}
 
-								if (name is null)
-								{
-									throw Error("Not found your name");
-								}
-
-								if (!_world.NameToId.TryGetValue(name, out var userId))
+								if (!_world.SessionIdToUserId.TryGetValue(sessionId, out var userIdFromSessionId))
 								{
 									throw Error("Not logged in");
 								}
@@ -324,11 +362,35 @@ namespace VRTeaServer
 									throw Error("conflict get value");
 								}
 
+								if (userIdFromSessionId != player.Id)
+								{
+									throw Error("pls logout that account. reason: Your account may have been hijacked, or you may be the culprit.");
+								}
+
 								if (!_world.Players.TryUpdate(userId, new Player
-									{ Id = userId, Name = name, PositionX = posX, PositionY = posY, PositionZ = posZ, PositionW = posW, RotationY = rotY }, player))
+									{ Id = player.Id, Name = player.Name, PositionX = posX, PositionY = posY, PositionZ = posZ, PositionW = posW, RotationY = rotY }, player))
 								{
 									throw Error("conflict update");
 								}
+
+								foreach(var (pSessionId, pUserId) in _world.SessionIdToUserId)
+								{
+									if (pUserId == userId)
+									{
+										continue;  // 自分の情報はしらない
+									}
+
+									if (respJson["body"] is null)
+									{
+										respJson["body"] = new JObject();
+									}
+
+									if (_world.Players.TryGetValue(pSessionId, out var playerData))
+									{
+										respJson["body"]![$"{pUserId}"] = JObject.FromObject(playerData);
+									}
+								}
+
 								break;
 							}
 							case "join":
@@ -343,7 +405,7 @@ namespace VRTeaServer
 
 								int tryCount = 0;
 								// 何回か試す
-								while (!_world.NameToId.TryAdd(joinedUserName, joinedUserId)
+								while (!_world.SessionIdToUserId.TryAdd(sessionId, joinedUserId)
 									&& tryCount < TryCount)
 								{
 									tryCount++;
@@ -357,7 +419,7 @@ namespace VRTeaServer
 
 								tryCount = 0;
 								// 何回か試す
-								while (!_world.Players.TryAdd(joinedUserId, new Player())
+								while (!_world.Players.TryAdd(joinedUserId, new Player{ Id = joinedUserId, Name = joinedUserName })
 									&& tryCount < TryCount)
 								{
 									tryCount++;
@@ -375,6 +437,10 @@ namespace VRTeaServer
 								break;
 						}
 					}
+					catch (GodJsonRequestException ex)
+					{
+						_ = ex;
+					}
 					catch (Exception ex)
 					{
 						Console.WriteLine($"God Json request error:{ex}");
@@ -382,7 +448,17 @@ namespace VRTeaServer
 					finally
 					{
 						// 必ず！直接！ 送信。
-						session.SendQueue.Enqueue(Encoding.UTF8.GetBytes(respJson.ToString()));
+						string jsonStr = respJson.ToString();
+						int jsonSize = Encoding.UTF8.GetByteCount(jsonStr);
+
+						Console.WriteLine($"Send:{jsonStr}");
+
+						byte[] sendBuffer = new byte[jsonSize + sizeof(int)];
+						// クライアントはWindowsだから必ずリトルエンディアンにする！
+						BinaryPrimitives.WriteInt32LittleEndian(sendBuffer, jsonSize);
+						Encoding.UTF8.GetBytes(jsonStr).AsSpan().CopyTo(sendBuffer.AsSpan(sizeof(int)));
+
+						session.SendQueue.Enqueue(sendBuffer);
 					}
 				}
 			}

@@ -15,10 +15,13 @@ namespace VRTeaServer
 
 	class Session : IDisposable
 	{
-		public Session(TcpClient client)
+		public Session(TcpClient client, int id)
 		{
 			Client = client;
+			Id = id;
 		}
+
+		public int Id { get; }
 
 		public TcpClient Client { get; }
 		public CancellationTokenSource cts { get; } = new();
@@ -39,10 +42,14 @@ namespace VRTeaServer
 		internal readonly ConcurrentDictionary<int, Session> _sessions = [];
 		private TcpListener? _listener;
 		private readonly CancellationTokenSource _cts = new();
+		public Action<int> OnDisconnected { get; set; } = delegate { };
+
 
 		public Server(ushort port)
 		{
 			_port = port;
+
+			OnDisconnected += Disconnect;
 		}
 
 		public void Dispose()
@@ -60,29 +67,33 @@ namespace VRTeaServer
 
 			_listener.Start();
 
+			int sessionIdCounter = 0;
+
 			while (true)
 			{
 				try
 				{
 					TcpClient tcpClient = await _listener.AcceptTcpClientAsync(_cts.Token);
 					Session session = _sessions.AddOrUpdate(
-						_sessions.Count,
-						new Session(tcpClient),
+						sessionIdCounter,
+						new Session(tcpClient, sessionIdCounter),
 						(int id, Session s) =>
 						{
 							s.Dispose();
-							return new Session(tcpClient);
+							return new Session(tcpClient, sessionIdCounter);
 						});
-					_ = SessionClientAsync(session, tcpClient, session.cts);
+					_ = SessionClientAsync(sessionIdCounter, session, tcpClient, session.cts);
 				}
 				catch (OperationCanceledException ex)
 				{
+					_ = ex;
 					break;
 				}
+				sessionIdCounter++;
 			}
 		}
 
-		private static async Task SessionClientAsync(Session session, TcpClient client, CancellationTokenSource cts)
+		private async Task SessionClientAsync(int id, Session session, TcpClient client, CancellationTokenSource cts)
 		{
 			using (session)
 			{
@@ -112,6 +123,8 @@ namespace VRTeaServer
 								await Task.Delay(10, cts.Token);
 							}
 						}, cts.Token));
+
+					OnDisconnected.Invoke(id);
 				}
 				catch (OperationCanceledException ex)
 				{
@@ -123,6 +136,11 @@ namespace VRTeaServer
 					Console.WriteLine($"{ex}");
 				}
 			}
+		}
+
+		private void Disconnect(int id)
+		{
+			_sessions.Remove(id, out _);
 		}
 
 		public void Stop()
