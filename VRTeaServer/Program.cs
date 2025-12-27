@@ -18,7 +18,7 @@ class Program
 			ipAddr = Console.ReadLine();
 		}
 
-		Server server = new(33333, ipAddr);
+		Server server = new(3333, ipAddr);
 		var serverTask = server.Start();
 		Console.Write("Ok!");
 
