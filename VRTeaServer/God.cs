@@ -251,11 +251,11 @@ namespace VRTeaServer
 						string indexHtmlPath = "";
 						if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 						{
-							Path.GetFullPath(Directory.GetCurrentDirectory() + ("../../../.././Public") + format.Directory);
+							indexHtmlPath = Path.GetFullPath(Directory.GetCurrentDirectory() + ("../../../.././Public") + format.Directory);
 						}
 						else
 						{
-							Path.GetFullPath(Directory.GetCurrentDirectory() + ("/Public/") + format.Directory);
+							indexHtmlPath = Path.GetFullPath(Directory.GetCurrentDirectory() + ("/Public/") + format.Directory);
 						}
 						string fileExtension = Path.GetExtension(indexHtmlPath).ToLower();
 						responce.SetContentTypeByExtension(fileExtension);
