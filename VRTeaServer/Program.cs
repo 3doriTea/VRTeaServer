@@ -50,7 +50,7 @@ class Program
 		Console.WriteLine("God ready...");
 		God god = new(world, server);
 		CancellationTokenSource cts = new();
-		var godTask = god.Start(cts.Token);
+		var godTask = god.Start(cts);
 		Console.Write("Ok!");
 
 		Task.WhenAll(

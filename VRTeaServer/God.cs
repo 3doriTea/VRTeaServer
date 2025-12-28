@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization.Metadata;
 using VRTeaServer.DB;
 using VRTeaServer.Web;
 
@@ -24,6 +25,7 @@ namespace VRTeaServer
 		private Server _server;
 		private ConcurrentDictionary<string, ActiveUser> _activeUsers = [];
 		private DBConnector _dBConnector = new();
+		private Reaper _reaper;
 
 		private int _anonymousCount = -1;
 
@@ -39,12 +41,18 @@ namespace VRTeaServer
 		{
 			_world = world;
 			_server = server;
+			_reaper = new Reaper(server, 5.0f);
+
 			_dBConnector.InitializeDatabaseAsync().Wait();
 
 			_server.OnDisconnected += disconnectedSessionId =>
 			{
 				// 切断したユーザーを消す
-				_world.SessionIdToUserId.Remove(disconnectedSessionId, out _);
+				int disconnectedUserId;
+				if (!_world.SessionIdToUserId.TryRemove(disconnectedSessionId, out disconnectedUserId))
+				{
+					return;  // ゲームプレイヤー以外が切断したなら無視
+				}
 
 				JObject sendJson = JObject.FromObject(new
 				{
@@ -52,7 +60,7 @@ namespace VRTeaServer
 					body = new
 					{
 						handle = "disconnected",
-						userId = disconnectedSessionId,
+						userId = disconnectedUserId,
 					},
 				});
 
@@ -70,13 +78,26 @@ namespace VRTeaServer
 
 				foreach (var (id, session) in _server._sessions)
 				{
+					if (_world.SessionIdToUserId.ContainsKey(id) == false)
+					{
+						// 送信先がゲームに参加していないセッションには送らない
+						continue;
+					}
+					if (disconnectedUserId == id)
+					{
+						// 切断したのが自分自身なら無視
+						continue;
+					}
+
 					session.SendQueue.Enqueue(sendBuffer);
 				}
 			};
 		}
 
-		public async Task Start(CancellationToken cancellationToken)
+		public async Task Start(CancellationTokenSource cts)
 		{
+			 _ = _reaper.Start(cts);
+
 			async Task RequestProc(string request, int sessionId, Session session)
 			{
 				int tryCount = 0;
@@ -405,7 +426,7 @@ namespace VRTeaServer
 										&& tryCount < TryCount)
 									{
 										tryCount++;
-										await Task.Delay(1, cancellationToken);
+										await Task.Delay(1, cts.Token);
 									}
 
 									if (tryCount >= TryCount)
@@ -434,7 +455,7 @@ namespace VRTeaServer
 									&& tryCount < TryCount)
 								{
 									tryCount++;
-									await Task.Delay(1, cancellationToken);
+									await Task.Delay(1, cts.Token);
 								}
 
 								if (tryCount >= TryCount)
@@ -448,7 +469,7 @@ namespace VRTeaServer
 									&& tryCount < TryCount)
 								{
 									tryCount++;
-									await Task.Delay(1, cancellationToken);
+									await Task.Delay(1, cts.Token);
 								}
 
 								if (tryCount >= TryCount)
@@ -500,9 +521,9 @@ namespace VRTeaServer
 						}
 					}
 
-					Console.Write(".");
+					Console.Write($".{_server._sessions.Count}-{_world.SessionIdToUserId.Count}");
 
-					await Task.Delay(intervalMillSec, cancellationToken);
+					await Task.Delay(intervalMillSec, cts.Token);
 				}
 			}
 			catch (TaskCanceledException ex)

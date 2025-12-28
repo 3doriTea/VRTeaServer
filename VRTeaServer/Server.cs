@@ -19,14 +19,19 @@ namespace VRTeaServer
 		{
 			Client = client;
 			Id = id;
+			Timestamp = DateTime.Now;
 		}
 
 		public int Id { get; }
 
 		public TcpClient Client { get; }
+		public bool HasDeathOmen { get; set; } = false;
 		public CancellationTokenSource cts { get; } = new();
 		public ConcurrentQueue<byte[]> SendQueue { get; set; } = new();
 		public ConcurrentQueue<string> RecvQueue { get; set; } = new();
+
+		// 最後に通信した時刻
+		public DateTime Timestamp{ get; set; }
 
 		public void Dispose()
 		{
@@ -42,8 +47,10 @@ namespace VRTeaServer
 		private ushort _portHTTP;
 		private string _address;
 		internal readonly ConcurrentDictionary<int, Session> _sessions = [];
-		private TcpListener? _listener;
+		private TcpListener? _listenerHTTP;
+		private TcpListener? _listenerGame;
 		private readonly CancellationTokenSource _cts = new();
+
 		public Action<int> OnDisconnected { get; set; } = delegate { };
 
 
@@ -66,89 +73,73 @@ namespace VRTeaServer
 
 		public async Task Start()
 		{
-			IPEndPoint? localIPEP;
+			IPEndPoint? localIPEPGame;
+			IPEndPoint? localIPEPHTTP;
 			if (string.IsNullOrEmpty(_address))
 			{
-				localIPEP = new(IPAddress.Any, _port);
+				localIPEPGame = new(IPAddress.Any, _portGame);
+				localIPEPHTTP = new(IPAddress.Any, _portHTTP);
 			}
 			else
 			{
-				localIPEP = new(IPAddress.Parse(_address), _port);
+				localIPEPGame = new(IPAddress.Parse(_address), _portGame);
+				localIPEPHTTP = new(IPAddress.Parse(_address), _portHTTP);
 			}
-			
-			_listener = new(localIPEP);
 
-			_listener.Start();
+			if (localIPEPGame.Equals(localIPEPHTTP))
+			{
+				_listenerGame = new (localIPEPGame);
+				_listenerHTTP = _listenerGame;
+			}
+			else
+			{
+				_listenerGame = new (localIPEPGame);
+				_listenerHTTP = new (localIPEPHTTP);
+			}
+
+			_listenerGame.Start();
+			_listenerHTTP.Start();
 
 			int sessionIdCounter = 0;
 
-			while (true)
+			async Task AcceptProcAsync(TcpListener listener, IService service)
 			{
-				try
+				while (true)
 				{
-					TcpClient tcpClient = await _listener.AcceptTcpClientAsync(_cts.Token);
-					Session session = _sessions.AddOrUpdate(
-						sessionIdCounter,
-						new Session(tcpClient, sessionIdCounter),
-						(int id, Session s) =>
-						{
-							s.Dispose();
-							return new Session(tcpClient, sessionIdCounter);
-						});
-					_ = SessionClientAsync(sessionIdCounter, session, tcpClient, session.cts);
-				}
-				catch (OperationCanceledException ex)
-				{
-					_ = ex;
-					break;
-				}
-				sessionIdCounter++;
-			}
-		}
+					try
+					{
+						TcpClient tcpClient = await listener.AcceptTcpClientAsync(_cts.Token);
+						
+						// キープアライブの設定
+						tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+						tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 5);
+						tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 1);
+						tcpClient.Client.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
 
-		private async Task SessionClientAsync(int id, Session session, TcpClient client, CancellationTokenSource cts)
-		{
-			using (session)
-			{
-				NetworkStream stream = client.GetStream();
-				byte[] buffer = new byte[1024];
-
-				try
-				{
-					await Task.WhenAll(
-						Task.Run(async () =>
-						{
-							int bytesRead = 0;
-							while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token)) > 0)
+						Session session = _sessions.AddOrUpdate(
+							sessionIdCounter,
+							new Session(tcpClient, sessionIdCounter),
+							(int id, Session s) =>
 							{
-								session.RecvQueue.Enqueue(Encoding.UTF8.GetString(buffer, 0, bytesRead));
-							}
-						}, cts.Token),
-						Task.Run(async () =>
-						{
-							byte[]? sendBuffer = null;
-							while (true)
-							{
-								while (session.SendQueue.TryDequeue(out sendBuffer))
-								{
-									await stream.WriteAsync(sendBuffer, cts.Token);
-								}
-								await Task.Delay(10, cts.Token);
-							}
-						}, cts.Token));
+								s.Dispose();
+								return new Session(tcpClient, sessionIdCounter);
+							});
+						_ = service.SessionClientAsync(sessionIdCounter, session, tcpClient, session.cts);
+					}
+					catch (OperationCanceledException ex)
+					{
+						_ = ex;
+						break;
+					}
+					sessionIdCounter++;
+				}
+			};
 
-					OnDisconnected.Invoke(id);
-				}
-				catch (OperationCanceledException ex)
-				{
-					_ = ex;
-					return;
-				}
-				catch (IOException ex)
-				{
-					Console.WriteLine($"{ex}");
-				}
-			}
+			await Task.WhenAll(
+			[
+				AcceptProcAsync(_listenerGame, new ServiceGame(this)),
+				AcceptProcAsync(_listenerHTTP, new ServiceHTTP())
+			]);
 		}
 
 		private void Disconnect(int id)
