@@ -16,6 +16,16 @@ class Program
 		{
 			Console.WriteLine("IPAddress:");
 			ipAddr = Console.ReadLine();
+
+			if (string.IsNullOrEmpty(ipAddr))
+			{
+				Console.WriteLine("Is to use IPAddress.Any? It is allow all access. (Y/n):");
+				if (Console.ReadLine() == "Y")
+				{
+					ipAddr = "";
+					break;
+				}
+			}
 		}
 
 		Server server = new(3333, ipAddr);
