@@ -38,7 +38,8 @@ namespace VRTeaServer
 
 	internal class Server : IDisposable
 	{
-		private ushort _port;
+		private ushort _portGame;
+		private ushort _portHTTP;
 		private string _address;
 		internal readonly ConcurrentDictionary<int, Session> _sessions = [];
 		private TcpListener? _listener;
@@ -46,9 +47,10 @@ namespace VRTeaServer
 		public Action<int> OnDisconnected { get; set; } = delegate { };
 
 
-		public Server(ushort port, string address)
+		public Server(ushort portGame, ushort portHTTP, string address)
 		{
-			_port = port;
+			_portGame = portGame;
+			_portHTTP = portHTTP;
 			_address = address;
 
 			OnDisconnected += Disconnect;
