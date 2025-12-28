@@ -3,6 +3,7 @@ using VRTeaServer;
 
 class Program
 {
+	const ushort PortGameService = 3333;
 	public static void Main(string[] args)
 	{
 		Console.WriteLine("World openning...");
@@ -28,7 +29,10 @@ class Program
 			}
 		}
 
-		Server server = new(3333, ipAddr);
+		//Console.WriteLine("Do you want to use port 3333 for both services, or separate them (Web: 80, Game: 3333)? (Y/n):");
+
+
+		Server server = new(PortGameService, ipAddr);
 		var serverTask = server.Start();
 		Console.Write("Ok!");
 
