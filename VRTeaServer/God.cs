@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using VRTeaServer.DB;
@@ -247,7 +248,15 @@ namespace VRTeaServer
 										//return;  // 知らんディレクトリへのアクセスは無視
 						}
 
-						string indexHtmlPath = Path.GetFullPath(Directory.GetCurrentDirectory() + ("../../../.././Public") + format.Directory);
+						string indexHtmlPath = "";
+						if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+						{
+							Path.GetFullPath(Directory.GetCurrentDirectory() + ("../../../.././Public") + format.Directory);
+						}
+						else
+						{
+							Path.GetFullPath(Directory.GetCurrentDirectory() + ("/Public/") + format.Directory);
+						}
 						string fileExtension = Path.GetExtension(indexHtmlPath).ToLower();
 						responce.SetContentTypeByExtension(fileExtension);
 						bool useBinary = fileExtension switch
