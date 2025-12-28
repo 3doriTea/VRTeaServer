@@ -405,24 +405,22 @@ namespace VRTeaServer
 									throw Error("conflict update");
 								}
 
-								Console.WriteLine($"_world.SessionIdToUserId.Count={_world.SessionIdToUserId.Count}");
+								if (respJson["body"] is null)
+								{
+									respJson["body"] = new JObject();
+								}
 
-								foreach(var (pSessionId, pUserId) in _world.SessionIdToUserId)
+								foreach (var (pSessionId, pUserId) in _world.SessionIdToUserId)
 								{
 									if (pUserId == userId)
 									{
 										continue;  // 自分の情報はしらない
 									}
 
-									if (respJson["body"] is null)
-									{
-										respJson["body"] = new JObject();
-									}
-
 									Player? playerData = null;
 
 									tryCount = 0;
-									while (!_world.Players.TryGetValue(pSessionId, out playerData)
+									while (!_world.Players.TryGetValue(pUserId, out playerData)
 										&& tryCount < TryCount)
 									{
 										tryCount++;
