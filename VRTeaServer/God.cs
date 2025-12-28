@@ -61,6 +61,7 @@ namespace VRTeaServer
 				int jsonSize = Encoding.UTF8.GetByteCount(jsonStr);
 
 				Console.WriteLine($"Send:{jsonStr}");
+				Console.WriteLine($"Leave:{disconnectedSessionId}");
 
 				byte[] sendBuffer = new byte[jsonSize + sizeof(int)];
 				// クライアントはWindowsだから必ずリトルエンディアンにする！
@@ -78,6 +79,7 @@ namespace VRTeaServer
 		{
 			async Task RequestProc(string request, int sessionId, Session session)
 			{
+				int tryCount = 0;
 				Console.WriteLine($"request:{request}");
 				if (request.StartsWith("POST"))
 				{
@@ -382,6 +384,8 @@ namespace VRTeaServer
 									throw Error("conflict update");
 								}
 
+								Console.WriteLine($"_world.SessionIdToUserId.Count={_world.SessionIdToUserId.Count}");
+
 								foreach(var (pSessionId, pUserId) in _world.SessionIdToUserId)
 								{
 									if (pUserId == userId)
@@ -394,10 +398,22 @@ namespace VRTeaServer
 										respJson["body"] = new JObject();
 									}
 
-									if (_world.Players.TryGetValue(pSessionId, out var playerData))
+									Player? playerData = null;
+
+									tryCount = 0;
+									while (!_world.Players.TryGetValue(pSessionId, out playerData)
+										&& tryCount < TryCount)
 									{
-										respJson["body"]![$"{pUserId}"] = JObject.FromObject(playerData);
+										tryCount++;
+										await Task.Delay(1, cancellationToken);
 									}
+
+									if (tryCount >= TryCount)
+									{
+										throw Error("conflict Players dict");
+									}
+
+									respJson["body"]![$"{pUserId}"] = JObject.FromObject(playerData!);
 								}
 
 								break;
@@ -412,7 +428,7 @@ namespace VRTeaServer
 								respJson["name"] = joinedUserName;
 								respJson["id"] = joinedUserId;
 
-								int tryCount = 0;
+								tryCount = 0;
 								// 何回か試す
 								while (!_world.SessionIdToUserId.TryAdd(sessionId, joinedUserId)
 									&& tryCount < TryCount)
