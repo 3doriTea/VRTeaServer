@@ -257,6 +257,7 @@ namespace VRTeaServer
 								format.Directory = "/login.html";
 								break;
 							case "/images/Discord-Logo-Blurple.png":
+							case "/images/MainIcon.png,":
 							case "/index.css":
 							case "/Index.html":
 								break;
