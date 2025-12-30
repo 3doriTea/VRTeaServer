@@ -10,6 +10,10 @@ namespace VRTeaServer
 	{
 		public Logger() { }
 
-
+		public void WriteLine(string content)
+		{
+			//string 
+			Console.WriteLine();
+		}
 	}
 }
