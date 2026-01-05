@@ -47,7 +47,7 @@ namespace VRTeaServer
 					await WriteOutLog();
 				}
 			}
-			catch (TaskCanceledException ex)
+			catch (TaskCanceledException)
 			{
 				return;
 			}

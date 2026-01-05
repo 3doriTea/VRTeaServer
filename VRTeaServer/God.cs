@@ -127,7 +127,7 @@ namespace VRTeaServer
 								{
 									json = JObject.Parse(format.Content);
 								}
-								catch (JsonReaderException ex)
+								catch (JsonReaderException)
 								{
 									return false;  // フォーマット違うから返さない
 								}
@@ -562,7 +562,7 @@ namespace VRTeaServer
 					await Task.Delay(intervalMillSec, cts.Token);
 				}
 			}
-			catch (TaskCanceledException ex)
+			catch (TaskCanceledException)
 			{
 				await _logger.WriteOutLog();
 				return;

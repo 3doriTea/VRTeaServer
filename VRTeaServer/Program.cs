@@ -56,7 +56,7 @@ class Program
 		Task.WhenAll(
 			serverTask,
 			godTask,
-			Task.Run(async () =>
+			Task.Run(() =>
 			{
 				Console.ReadLine();
 				cts.Cancel();
