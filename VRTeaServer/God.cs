@@ -26,6 +26,7 @@ namespace VRTeaServer
 		private ConcurrentDictionary<string, ActiveUser> _activeUsers = [];
 		private DBConnector _dBConnector = new();
 		private Reaper _reaper;
+		private AI _ai;
 
 		private int _anonymousCount = -1;
 
@@ -42,6 +43,7 @@ namespace VRTeaServer
 			_world = world;
 			_server = server;
 			_reaper = new Reaper(server, 5.0f);
+			_ai = new AI();
 
 			_dBConnector.InitializeDatabaseAsync().Wait();
 
@@ -476,6 +478,9 @@ namespace VRTeaServer
 									throw Error("conflict players dict");
 								}
 
+								break;
+							case "ask":
+								respJson["head"] = "asked";
 								break;
 							default:
 								respJson["head"] = "\\_ツ_/";

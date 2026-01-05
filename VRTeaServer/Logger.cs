@@ -21,16 +21,37 @@ namespace VRTeaServer
 
 			public override string ToString()
 			{
-				return $"{Timestapm:HH:mm:ss%K}";
+				return $"[{Timestapm:HH:mm:ss%K}] {Content}";
 			}
 		}
 
-		public Logger() { }
+
+		private readonly string _logFilePath;
+		private readonly List<Log> _logs = [];
+		public Logger(string logFilePath)
+		{
+			_logFilePath = logFilePath;
+		}
 
 		public void WriteLine(string content)
 		{
-			string log = $"[{}]{content}";
-			Console.WriteLine();
+			_logs.Add(new Log(content, DateTime.Now));
+			Console.WriteLine(_logs.Last());
+		}
+
+		/// <summary>
+		/// ログをファイルに書き出す
+		/// </summary>
+		/// <returns>非同期処理タスク</returns>
+		public async Task WriteOutLog()
+		{
+			string? logsText;
+			lock (_logs)
+			{
+				logsText = string.Join("\n", _logs);
+				_logs.Clear();
+			}
+			await File.WriteAllTextAsync(_logFilePath, logsText);
 		}
 	}
 }
