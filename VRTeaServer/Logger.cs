@@ -28,7 +28,8 @@ namespace VRTeaServer
 			}
 		}
 
-		public float SaveIntervalSec { get; set; } = 10;
+		public float SaveIntervalSec { get; set; } = 60.0f * 60.0f;  // デフォルト値
+		public int SaveLimitCount { get; set; } = 1000;  // セーブする行数
 		private readonly string _logFileDirPath;
 		private readonly List<Log> _logs = [];
 		public Logger(string logFileDirPath)
@@ -60,6 +61,7 @@ namespace VRTeaServer
 				_logs.Add(log);
 			}
 			Console.WriteLine(log);
+			_ = CheckLimit();
 		}
 
 		public void Write(string content)
@@ -90,6 +92,20 @@ namespace VRTeaServer
 				_logs.Add(log);
 			}
 			Console.WriteLine(log);
+			_ = CheckLimit();
+		}
+
+		private async Task CheckLimit()
+		{
+			bool needWriteOut = false;
+			lock (_logs)
+			{
+				needWriteOut = _logs.Count > SaveLimitCount;
+			}
+			if (needWriteOut)
+			{
+				await WriteOutLog();
+			}
 		}
 
 		/// <summary>
@@ -108,7 +124,7 @@ namespace VRTeaServer
 			}
 			try
 			{
-				await File.WriteAllTextAsync($"{_logFileDirPath}/{DateTime.Now:HH-mm-ss}_{count:000}.log", logsText);
+				await File.WriteAllTextAsync($"{_logFileDirPath}/{DateTime.Now:yyyyMMdd_HHmmss}_{count:00000}.log", logsText);
 			}
 			catch (Exception ex)
 			{
