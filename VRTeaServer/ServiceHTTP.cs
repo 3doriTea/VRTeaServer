@@ -31,7 +31,7 @@ namespace VRTeaServer
 								{
 									break;  // 相手が切断
 								}
-								session.RecvQueue.Enqueue(Encoding.UTF8.GetString(buffer, 0, bytesRead));
+								session.RecvQueue.Enqueue(new RecvData(buffer.AsSpan(0, bytesRead).ToArray()));
 								session.Timestamp = DateTime.Now;
 							}
 							Console.WriteLine("disc read");

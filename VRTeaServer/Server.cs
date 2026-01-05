@@ -12,7 +12,20 @@ using System.Threading.Tasks;
 
 namespace VRTeaServer
 {
+	readonly struct RecvData
+	{
+		public readonly byte[] buffer;
 
+		public RecvData(byte[] bytes)
+		{
+			buffer = bytes;
+		}
+
+		public readonly string GetString()
+		{
+			return Encoding.UTF8.GetString(buffer);
+		}
+	}
 	class Session : IDisposable
 	{
 		public Session(TcpClient client, int id)
@@ -28,7 +41,7 @@ namespace VRTeaServer
 		public bool HasDeathOmen { get; set; } = false;
 		public CancellationTokenSource cts { get; } = new();
 		public ConcurrentQueue<byte[]> SendQueue { get; set; } = new();
-		public ConcurrentQueue<string> RecvQueue { get; set; } = new();
+		public ConcurrentQueue<RecvData> RecvQueue { get; set; } = new();
 
 		// 最後に通信した時刻
 		public DateTime Timestamp{ get; set; }

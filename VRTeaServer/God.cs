@@ -109,12 +109,12 @@ namespace VRTeaServer
 			_ = _reaper.Start(cts);
 			_ = _logger.Start(cts);
 
-			async Task RequestProc(string request, int sessionId, Session session)
+			async Task<bool> RequestProc(string request, int sessionId, Session session)
 			{
 				int tryCount = 0;
-				_logger.WriteLine($"request:{request}");
 				if (request.StartsWith("POST"))
 				{
+					_logger.WriteLine($"POST request:{request}");
 					var format = HttpRequest.Load(request);
 					var responce = new HttpResponce();
 					try
@@ -129,12 +129,12 @@ namespace VRTeaServer
 								}
 								catch (JsonReaderException ex)
 								{
-									return;  // フォーマット違うから返さない
+									return false;  // フォーマット違うから返さない
 								}
 								string? head = (string?)json["header"];
 								if (head is null)
 								{
-									return;  // フォーマット違うから返さない
+									return false;  // フォーマット違うから返さない
 								}
 
 								var resJson = new JObject();
@@ -146,13 +146,13 @@ namespace VRTeaServer
 										string? name = (string?)json["name"];
 										if (name is null)
 										{
-											return;  // フォーマット違うから返さない
+											return false;  // フォーマット違うから返さない
 										}
 
 										string? passwordHash = (string?)json["passwordHash"];
 										if (passwordHash is null)
 										{
-											return;  // フォーマット違うから返さない
+											return false;  // フォーマット違うから返さない
 										}
 										bool succeedLogin = false;
 										if (await _dBConnector.ExistsAsync(name))
@@ -198,12 +198,12 @@ namespace VRTeaServer
 										string? sessionHash = (string?)json["sessionHash"];
 										if (sessionHash is null)
 										{
-											return;  // フォーマット違うから返さない
+											return false;  // フォーマット違うから返さない
 										}
 										string? at = (string?)json["at"];
 										if (at is null)
 										{
-											return;  // フォーマット違うから返さない
+											return false;  // フォーマット違うから返さない
 										}
 
 										if (_activeUsers.ContainsKey(sessionHash) == false)
@@ -233,11 +233,11 @@ namespace VRTeaServer
 
 										break;
 									default:
-										return;  // フォーマット違うから返さない
+										return false;  // フォーマット違うから返さない
 								}
 								break;
 							default:
-								return;  // 知らんディレクトリへのアクセスは無視
+								return false;  // 知らんディレクトリへのアクセスは無視
 						}
 
 						responce.StoreResponce(out var buffer);
@@ -250,6 +250,7 @@ namespace VRTeaServer
 				}
 				else if (request.StartsWith("GET"))
 				{
+					_logger.WriteLine($"GET request:{request}");
 					var format = HttpRequest.Load(request);
 					_logger.WriteLine($"format.Method={format.Method}, format.Directory={format.Directory}, format.Version={format.Version}");
 					_logger.WriteLine(new string('-', 30));
@@ -309,6 +310,7 @@ namespace VRTeaServer
 						}
 						responce.StoreResponce(out var buffer);
 						session.SendQueue.Enqueue(buffer);
+						return true;
 					}
 					catch (Exception ex)
 					{
@@ -317,7 +319,7 @@ namespace VRTeaServer
 				}
 				else if (request.StartsWith("{"))
 				{
-					_logger.WriteLine(request);
+					_logger.WriteLine($"Json(Game) request:{request}");
 
 					JObject? json = null;
 					try
@@ -327,12 +329,12 @@ namespace VRTeaServer
 					catch
 					{
 						_logger.WriteLine("Failed parse request json");
-						return;  // 変換できないため無視
+						return false;  // 変換できないため無視
 					}
 					string? head = (string?)json["head"];
 					if (head is null)
 					{
-						return;  // ヘッドがないため無視
+						return false;  // ヘッドがないため無視
 					}
 
 					var respJson = new JObject();
@@ -534,7 +536,9 @@ namespace VRTeaServer
 
 						session.SendQueue.Enqueue(sendBuffer);
 					}
+					return true;
 				}
+				return false;
 			}
 
 			try
@@ -545,7 +549,11 @@ namespace VRTeaServer
 					{
 						if (session.RecvQueue.TryDequeue(out var request))
 						{
-							await RequestProc(request, id, session);
+							bool responced = await RequestProc(request.GetString(), id, session);
+							if (responced == false)
+							{
+								_logger.WriteLine(BitConverter.ToString(request.buffer));
+							}
 						}
 					}
 
@@ -556,11 +564,13 @@ namespace VRTeaServer
 			}
 			catch (TaskCanceledException ex)
 			{
+				await _logger.WriteOutLog();
 				return;
 			}
 			catch (Exception ex)
 			{
 				_logger.Error($"{ex}");
+				await _logger.WriteOutLog();
 			}
 		}
 	}
