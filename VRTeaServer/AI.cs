@@ -1,24 +1,19 @@
 ﻿using GroqApiLibrary;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 namespace VRTeaServer
 {
 	internal class AI
 	{
-		public AI() { }
-		public async Task Ask(string content)
+		private readonly GroqApiClient _groqApi;
+
+		public AI(string apiKey)
 		{
-			
+			_groqApi = new GroqApiClient(apiKey);
+		}
 
-			string apiKey = "あなたのAPIキー";
-			var groqApi = new GroqApiClient(apiKey);
-
-			// 2. リクエスト内容（JSON形式）の作成
+		public async Task<string?> Ask(string content)
+		{
 			var request = new JsonObject
 			{
 				["model"] = "llama3-8b-8192", // または "llama3-70b-8192"
@@ -27,7 +22,19 @@ namespace VRTeaServer
 					new JsonObject
 					{
 						["role"] = "system",
-						["content"] = "あなたは有能なアシスタントです。"
+						["content"] = string.Join("\n",
+							[
+								"日本語で喋る",
+								"足車輪",
+								"おしとやかな性格",
+								"年齢38歳",
+								"性別は中性",
+								"声のトーンは1.08",
+								"趣味はお手玉",
+								"好きな色は赤紫色",
+								"一人称は「俺っち」",
+								"語尾は「ピカ」",
+							])
 					},
 					new JsonObject
 					{
@@ -39,19 +46,19 @@ namespace VRTeaServer
 				["max_tokens"] = 1024
 			};
 
-			// 3. APIを呼び出して結果を表示
 			try
 			{
-				var result = await groqApi.CreateChatCompletionAsync(request);
-				// レスポンスからテキスト部分を抽出
+				var result = await _groqApi.CreateChatCompletionAsync(request);
 				var responseText = result?["choices"]?[0]?["message"]?["content"]?.ToString();
 
-				Console.WriteLine("AIの回答:");
+				Console.WriteLine("AI Answer:");
 				Console.WriteLine(responseText);
+				return responseText!;
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"エラーが発生しました: {ex.Message}");
+				Console.WriteLine($"Error: {ex}");
+				return null;
 			}
 		}
 	}

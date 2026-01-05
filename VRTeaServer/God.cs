@@ -2,13 +2,9 @@
 using Newtonsoft.Json.Linq;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Serialization.Metadata;
 using VRTeaServer.DB;
 using VRTeaServer.Web;
 
@@ -27,6 +23,7 @@ namespace VRTeaServer
 		private DBConnector _dBConnector = new();
 		private Reaper _reaper;
 		private AI _ai;
+		private readonly Logger _logger = new("./");
 
 		private int _anonymousCount = -1;
 
@@ -43,7 +40,18 @@ namespace VRTeaServer
 			_world = world;
 			_server = server;
 			_reaper = new Reaper(server, 5.0f);
-			_ai = new AI();
+
+			string? tokenFilePath;
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				tokenFilePath = Path.GetFullPath(Directory.GetCurrentDirectory() + "../../../.././Private/AI.token");
+			}
+			else
+			{
+				tokenFilePath = Path.GetFullPath(Directory.GetCurrentDirectory() + "/Private/AI.token");
+			}
+
+			_ai = new AI(tokenFilePath);
 
 			_dBConnector.InitializeDatabaseAsync().Wait();
 
@@ -70,8 +78,8 @@ namespace VRTeaServer
 				string jsonStr = sendJson.ToString();
 				int jsonSize = Encoding.UTF8.GetByteCount(jsonStr);
 
-				Console.WriteLine($"Send:{jsonStr}");
-				Console.WriteLine($"Leave:{disconnectedSessionId}");
+				_logger.WriteLine($"Send:{jsonStr}");
+				_logger.WriteLine($"Leave:{disconnectedSessionId}");
 
 				byte[] sendBuffer = new byte[jsonSize + sizeof(int)];
 				// クライアントはWindowsだから必ずリトルエンディアンにする！
@@ -98,12 +106,13 @@ namespace VRTeaServer
 
 		public async Task Start(CancellationTokenSource cts)
 		{
-			 _ = _reaper.Start(cts);
+			_ = _reaper.Start(cts);
+			_ = _logger.Start(cts);
 
 			async Task RequestProc(string request, int sessionId, Session session)
 			{
 				int tryCount = 0;
-				Console.WriteLine($"request:{request}");
+				_logger.WriteLine($"request:{request}");
 				if (request.StartsWith("POST"))
 				{
 					var format = HttpRequest.Load(request);
@@ -236,14 +245,14 @@ namespace VRTeaServer
 					}
 					catch (Exception ex)
 					{
-						Console.WriteLine($"POST responce Error:{ex}");
+						_logger.WriteLine($"POST responce Error:{ex}");
 					}
 				}
 				else if (request.StartsWith("GET"))
 				{
 					var format = HttpRequest.Load(request);
-					Console.WriteLine($"format.Method={format.Method}, format.Directory={format.Directory}, format.Version={format.Version}");
-					Console.WriteLine(new string('-', 30));
+					_logger.WriteLine($"format.Method={format.Method}, format.Directory={format.Directory}, format.Version={format.Version}");
+					_logger.WriteLine(new string('-', 30));
 					var responce = new HttpResponce();
 					try
 					{
@@ -303,12 +312,12 @@ namespace VRTeaServer
 					}
 					catch (Exception ex)
 					{
-						Console.WriteLine($"FileAccessError:{ex}");
+						_logger.WriteLine($"FileAccessError:{ex}");
 					}
 				}
 				else if (request.StartsWith("{"))
 				{
-					Console.WriteLine(request);
+					_logger.WriteLine(request);
 
 					JObject? json = null;
 					try
@@ -317,7 +326,7 @@ namespace VRTeaServer
 					}
 					catch
 					{
-						Console.WriteLine("Failed parse request json");
+						_logger.WriteLine("Failed parse request json");
 						return;  // 変換できないため無視
 					}
 					string? head = (string?)json["head"];
@@ -481,6 +490,21 @@ namespace VRTeaServer
 								break;
 							case "ask":
 								respJson["head"] = "asked";
+
+								if (!json.TryGet<string>("ask", out var askContent))
+								{
+									throw Error("Missing request \"ask\"");
+								}
+
+								string? result = await _ai.Ask(askContent!);
+								if (result is null)
+								{
+									respJson["reply"] = "分からない";
+								}
+								else
+								{
+									respJson["reply"] = result;
+								}
 								break;
 							default:
 								respJson["head"] = "\\_ツ_/";
@@ -493,7 +517,7 @@ namespace VRTeaServer
 					}
 					catch (Exception ex)
 					{
-						Console.WriteLine($"God Json request error:{ex}");
+						_logger.WriteLine($"God Json request error:{ex}");
 					}
 					finally
 					{
@@ -501,7 +525,7 @@ namespace VRTeaServer
 						string jsonStr = respJson.ToString();
 						int jsonSize = Encoding.UTF8.GetByteCount(jsonStr);
 
-						Console.WriteLine($"Send:{jsonStr}");
+						_logger.WriteLine($"Send:{jsonStr}");
 
 						byte[] sendBuffer = new byte[jsonSize + sizeof(int)];
 						// クライアントはWindowsだから必ずリトルエンディアンにする！
@@ -525,7 +549,7 @@ namespace VRTeaServer
 						}
 					}
 
-					Console.Write($".{_server._sessions.Count}-{_world.SessionIdToUserId.Count}");
+					_logger.Write($".{_server._sessions.Count}-{_world.SessionIdToUserId.Count}");
 
 					await Task.Delay(intervalMillSec, cts.Token);
 				}
@@ -536,7 +560,7 @@ namespace VRTeaServer
 			}
 			catch (Exception ex)
 			{
-				Console.Error.WriteLine(ex);
+				_logger.Error($"{ex}");
 			}
 		}
 	}
