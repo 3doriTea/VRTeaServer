@@ -51,7 +51,7 @@ namespace VRTeaServer
 				tokenFilePath = Path.GetFullPath(Directory.GetCurrentDirectory() + "/Private/AI.token");
 			}
 
-			_ai = new AI(tokenFilePath);
+			_ai = new AI("");
 
 			_dBConnector.InitializeDatabaseAsync().Wait();
 

@@ -16,7 +16,7 @@ namespace VRTeaServer
 		{
 			var request = new JsonObject
 			{
-				["model"] = "llama3-8b-8192", // または "llama3-70b-8192"
+				["model"] = "openai/gpt-oss-20b",//"llama3-8b-8192", // または "llama3-70b-8192"
 				["messages"] = new JsonArray
 				{
 					new JsonObject
